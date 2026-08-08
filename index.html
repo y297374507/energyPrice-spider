@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>大宗能源价格监控看板</title>
+    <!-- 引入 Tailwind CSS 与 Chart.js 图表库 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-gray-100 text-gray-800 font-sans p-6">
+    <div class="max-w-6xl mx-auto space-y-6">
+        <!-- 头部 Header -->
+        <div class="bg-white p-6 rounded-xl shadow-md flex justify-between items-center">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900">大宗能源价格高频监测</h1>
+                <p class="text-sm text-gray-500 mt-1">采集来源：上海石油天然气交易中心 (SHPGX) / 中国煤炭市场网 (CCTD)</p>
+            </div>
+            <div class="text-right">
+                <span class="text-xs text-gray-400 block">最后更新时间</span>
+                <span id="last-update" class="text-sm font-semibold text-blue-600">加载中...</span>
+            </div>
+        </div>
+
+        <!-- 核心图表卡片 -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- 图表 1: LNG & 汽柴油 -->
+            <div class="bg-white p-5 rounded-xl shadow-md">
+                <h2 class="text-lg font-semibold text-gray-800 mb-4">油气价格走势快照</h2>
+                <div class="relative h-64">
+                    <canvas id="gasChart"></canvas>
+                </div>
+            </div>
+
+            <!-- 图表 2: CCTD 动力煤 -->
+            <div class="bg-white p-5 rounded-xl shadow-md">
+                <h2 class="text-lg font-semibold text-gray-800 mb-4">CCTD 秦皇岛动力煤快照</h2>
+                <div class="relative h-64">
+                    <canvas id="coalChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- 数据快照日志列表 -->
+        <div class="bg-white p-6 rounded-xl shadow-md">
+            <h2 class="text-lg font-semibold text-gray-800 mb-4">历史采集日志 (最新 10 条)</h2>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-sm text-gray-600">
+                    <thead class="bg-gray-50 text-gray-700 uppercase text-xs">
+                        <tr>
+                            <th class="py-3 px-4">采集时间</th>
+                            <th class="py-3 px-4">中国 LNG 状态</th>
+                            <th class="py-3 px-4">汽柴油状态</th>
+                            <th class="py-3 px-4">动力煤状态</th>
+                        </tr>
+                    </thead>
+                    <tbody id="log-table" class="divide-y divide-gray-100">
+                        <!-- 动态注入 -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function loadEnergyData() {
+            try {
+                const response = await fetch('./data.json');
+                if (!response.ok) throw new Error("无法加载 data.json");
+                const data = await response.json();
+
+                if (!data || data.length === 0) return;
+
+                // 1. 设置最后更新时间
+                const lastItem = data[data.length - 1];
+                document.getElementById('last-update').innerText = lastItem.timestamp;
+
+                // 2. 准备数据 X 轴 (时间轴)
+                const labels = data.map(entry => entry.timestamp.split(' ')[0]);
+
+                // 渲染数据表
+                const logTable = document.getElementById('log-table');
+                [...data].reverse().slice(0, 10).forEach(row => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td class="py-2.5 px-4 font-mono">${row.timestamp}</td>
+                        <td class="py-2.5 px-4">${row.items['中国LNG出厂价格（全国）'] ? '✅ 正常' : '❌ 缺失'}</td>
+                        <td class="py-2.5 px-4">${row.items['中国汽柴油批发价格'] ? '✅ 正常' : '❌ 缺失'}</td>
+                        <td class="py-2.5 px-4">${row.items['CCTD秦皇岛动力煤价格'] ? '✅ 正常' : '❌ 缺失'}</td>
+                    `;
+                    logTable.appendChild(tr);
+                });
+
+                // 3. 渲染图表 1 (快照记录数示例)
+                new Chart(document.getElementById('gasChart'), {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: '历史快照数据流采样',
+                            data: data.map((_, idx) => idx + 1),
+                            borderColor: '#3b82f6',
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            fill: true,
+                            tension: 0.3
+                        }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false }
+                });
+
+                // 4. 渲染图表 2 (模拟状态分布)
+                new Chart(document.getElementById('coalChart'), {
+                    type: 'bar',
+                    data: {
+                        labels: labels.slice(-15),
+                        dataSets: [{
+                            label: '动力煤数据采集状态',
+                            data: data.slice(-15).map(e => e.items['CCTD秦皇岛动力煤价格'] ? 1 : 0),
+                            backgroundColor: '#10b981'
+                        }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false }
+                });
+
+            } catch (err) {
+                console.error(err);
+                document.getElementById('last-update').innerText = "加载失败";
+            }
+        }
+
+        loadEnergyData();
+    </script>
+</body>
+</html>
