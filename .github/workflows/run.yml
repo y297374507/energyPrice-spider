@@ -2,6 +2,7 @@ name: energyPriceSpider
 
 on:
   schedule:
+    # 每天北京时间 17:18 (UTC 09:18) 自动运行
     - cron: '18 9 * * *'
 
   workflow_dispatch:
@@ -15,10 +16,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
 
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
@@ -36,13 +37,14 @@ jobs:
           git config --local user.email "action@github.com"
           git config --local user.name "github-actions"
 
-          git add data.csv
+          # 提交 data.json 和 index.html
+          git add data.json index.html
 
-          # 如果没有变化就不提交
+          # 如果数据没有发生任何改变则跳过 commit
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "update data"
+            git commit -m "update energy price data.json"
             git push
           fi
 
