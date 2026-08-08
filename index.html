@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>大宗能源价格高频监测看板</title>
-    <!-- Tailwind CSS 与 Chart.js -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -20,173 +19,179 @@
                 <p class="text-sm text-gray-500 mt-1">数据源：上海石油天然气交易中心 (SHPGX) | 中国煤炭市场网 (CCTD)</p>
             </div>
             <div class="bg-blue-50 px-4 py-2 rounded-xl text-right">
-                <span class="text-xs text-blue-500 block font-medium">最后抓取时间</span>
+                <span class="text-xs text-blue-500 block font-medium">最后自动抓取时间</span>
                 <span id="last-update" class="text-sm font-semibold text-blue-700">加载中...</span>
             </div>
         </div>
 
-        <!-- 核心图表区域 -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            
-            <!-- 图表 1: 全国 LNG 出厂价格 -->
+        <!-- 实时价格卡片网格 -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-                <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-base font-bold text-gray-800 flex items-center gap-1.5">
-                        <span class="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
-                        中国 LNG 出厂价格 (全国)
-                    </h2>
-                    <span id="lng-latest" class="text-lg font-extrabold text-blue-600">-- 元/吨</span>
-                </div>
-                <div class="relative h-64">
-                    <canvas id="lngChart"></canvas>
-                </div>
+                <span class="text-xs text-gray-400 font-medium">中国 LNG 出厂价 (全国)</span>
+                <div id="lng-price" class="text-2xl font-black text-blue-600 mt-1">-- 元/吨</div>
+                <span id="lng-date" class="text-xs text-gray-400 mt-1 block">日期: --</span>
             </div>
-
-            <!-- 图表 2: CCTD 动力煤价格 -->
             <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-                <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-base font-bold text-gray-800 flex items-center gap-1.5">
-                        <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
-                        CCTD 秦皇岛动力煤价格
-                    </h2>
-                    <span id="coal-latest" class="text-lg font-extrabold text-amber-600">-- 元/吨</span>
-                </div>
-                <div class="relative h-64">
+                <span class="text-xs text-gray-400 font-medium">CCTD 秦皇岛动力煤 (Q5500)</span>
+                <div id="coal-price" class="text-2xl font-black text-amber-600 mt-1">-- 元/吨</div>
+                <span id="coal-date" class="text-xs text-gray-400 mt-1 block">日期: --</span>
+            </div>
+            <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+                <span class="text-xs text-gray-400 font-medium">中国汽柴油批发价 (柴 / 汽)</span>
+                <div id="oil-price" class="text-xl font-bold text-emerald-600 mt-1.5">-- / -- 元/吨</div>
+                <span id="oil-date" class="text-xs text-gray-400 mt-1 block">日期: --</span>
+            </div>
+        </div>
+
+        <!-- 图表区域 -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- 图表 1: CCTD 动力煤历史走势 -->
+            <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+                <h2 class="text-base font-bold text-gray-800 mb-4 flex items-center gap-2">
+                    <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+                    CCTD 秦皇岛动力煤价格走势 (Q5500大卡)
+                </h2>
+                <div class="relative h-72">
                     <canvas id="coalChart"></canvas>
                 </div>
             </div>
 
-        </div>
-
-        <!-- JSON 结构诊断面板（解决提取不到数值的核心） -->
-        <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-            <h2 class="text-base font-bold text-gray-800 mb-2">🔍 原始数据采样调试 (用于排查结构)</h2>
-            <p class="text-xs text-gray-400 mb-3">如果上方价格仍显示 --，请参考以下 JSON 节点字段：</p>
-            <pre id="debug-json" class="bg-gray-900 text-green-400 p-4 rounded-xl text-xs overflow-x-auto max-h-48 font-mono"></pre>
+            <!-- 图表 2: LNG 出厂价格历史采集 -->
+            <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+                <h2 class="text-base font-bold text-gray-800 mb-4 flex items-center gap-2">
+                    <span class="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
+                    全国 LNG 出厂价格高频跟踪
+                </h2>
+                <div class="relative h-72">
+                    <canvas id="lngChart"></canvas>
+                </div>
+            </div>
         </div>
 
     </div>
 
     <script>
-        // 智能递归解析函数：深度搜寻 JSON 对象里的日期和数值
-        function extractPrices(obj) {
-            let points = [];
-
-            function traverse(o) {
-                if (!o) return;
-
-                if (Array.isArray(o)) {
-                    o.forEach(item => traverse(item));
-                } else if (typeof o === 'object') {
-                    // 尝试匹配常见日期和价格属性名
-                    let date = o.rq || o.date || o.END_DATE || o.time || o.create_time || o.publish_time || o.dt;
-                    let price = o.price || o.index_price || o.PRICE || o.value || o.zs || o.val || o.number;
-
-                    // 转换数字
-                    if (price !== undefined && price !== null) {
-                        let parsedPrice = parseFloat(price);
-                        if (!isNaN(parsedPrice) && parsedPrice > 0) {
-                            points.push({
-                                date: date ? String(date).split(' ')[0] : '常规快照',
-                                price: parsedPrice
-                            });
-                        }
-                    }
-
-                    // 深入子节点查找
-                    for (let key in o) {
-                        if (typeof o[key] === 'object') {
-                            traverse(o[key]);
-                        }
-                    }
-                }
-            }
-
-            traverse(obj);
-            
-            // 去重并截取最后 30 条数据
-            let uniqueMap = new Map();
-            points.forEach(p => uniqueMap.set(p.date + '_' + p.price, p));
-            return Array.from(uniqueMap.values()).slice(-30);
-        }
-
-        async function initDashboard() {
+        async function renderDashboard() {
             try {
                 const response = await fetch('./data.json');
-                if (!response.ok) throw new Error("读取 data.json 失败");
+                if (!response.ok) throw new Error("无法读取 data.json");
                 const history = await response.json();
 
                 if (!history || history.length === 0) return;
 
+                // 1. 设置最后更新时间
                 const latestRecord = history[history.length - 1];
                 document.getElementById('last-update').innerText = latestRecord.timestamp;
 
-                // 显示最新拿到的 JSON 数据结构以供观察
-                document.getElementById('debug-json').innerText = JSON.stringify(latestRecord, null, 2).slice(0, 1500) + "\n...";
+                const items = latestRecord.items;
 
-                // 深度提取 LNG 和 动力煤 数据
-                const lngRaw = latestRecord.items['中国LNG出厂价格（全国）'];
-                const coalRaw = latestRecord.items['CCTD秦皇岛动力煤价格'];
-
-                const lngSeries = extractPrices(lngRaw);
-                const coalSeries = extractPrices(coalRaw);
-
-                // 更新最新数值
-                if (lngSeries.length > 0) {
-                    const latestLNG = lngSeries[lngSeries.length - 1].price;
-                    document.getElementById('lng-latest').innerText = `${latestLNG} 元/吨`;
+                // ==================== 2. 解析 LNG 数据 ====================
+                const lngObj = items['中国LNG出厂价格（全国）'];
+                if (lngObj && lngObj.BASEPRICE) {
+                    document.getElementById('lng-price').innerText = `${lngObj.BASEPRICE} 元/吨`;
+                    document.getElementById('lng-date').innerText = `发布日期: ${lngObj.DATA || '最新'}`;
                 }
 
-                if (coalSeries.length > 0) {
-                    const latestCoal = coalSeries[coalSeries.length - 1].price;
-                    document.getElementById('coal-latest').innerText = `${latestCoal} 元/吨`;
+                // ==================== 3. 解析 汽柴油 数据 ====================
+                const oilObj = items['中国汽柴油批发价格'];
+                if (oilObj && oilObj.BASEPRICE_diesel) {
+                    document.getElementById('oil-price').innerText = `${oilObj.BASEPRICE_diesel} / ${oilObj.BASEPRICE_petrol}`;
+                    document.getElementById('oil-date').innerText = `发布日期: ${oilObj.DATA_diesel || '最新'}`;
                 }
 
-                // 绘制 LNG 折线图
-                if (lngSeries.length > 0) {
-                    new Chart(document.getElementById('lngChart'), {
-                        type: 'line',
-                        data: {
-                            labels: lngSeries.map(s => s.date),
-                            datasets: [{
-                                label: 'LNG 出厂价 (元/吨)',
-                                data: lngSeries.map(s => s.price),
-                                borderColor: '#3b82f6',
-                                backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                                fill: true,
-                                tension: 0.3
-                            }]
-                        },
-                        options: { responsive: true, maintainAspectRatio: false }
-                    });
+                // ==================== 4. 解析 CCTD 动力煤数据 (数组格式) ====================
+                const coalObj = items['CCTD秦皇岛动力煤价格'];
+                let coalDates = [];
+                let coalPrices = [];
+
+                if (coalObj && Array.isArray(coalObj.data) && coalObj.data.length > 0) {
+                    // 最新一期的价格数据
+                    const latestCoal = coalObj.data[0]; 
+                    document.getElementById('coal-price').innerText = `${latestCoal[1]} 元/吨`;
+                    document.getElementById('coal-date').innerText = `发布日期: ${latestCoal[0]}`;
+
+                    // 反转数据，使其按日期从旧到新排列（用于渲染图表）
+                    const reversedData = [...coalObj.data].reverse();
+                    coalDates = reversedData.map(row => row[0]); // 日期
+                    coalPrices = reversedData.map(row => parseFloat(row[1])); // Q5500价格
                 }
 
-                // 绘制 动力煤 折线图
-                if (coalSeries.length > 0) {
+                // ==================== 5. 渲染 动力煤 图表 ====================
+                if (coalPrices.length > 0) {
                     new Chart(document.getElementById('coalChart'), {
                         type: 'line',
                         data: {
-                            labels: coalSeries.map(s => s.date),
+                            labels: coalDates,
                             datasets: [{
-                                label: '动力煤价格 (元/吨)',
-                                data: coalSeries.map(s => s.price),
+                                label: '5500大卡动力煤 (元/吨)',
+                                data: coalPrices,
                                 borderColor: '#f59e0b',
                                 backgroundColor: 'rgba(245, 158, 11, 0.1)',
                                 fill: true,
-                                tension: 0.3
+                                tension: 0.3,
+                                borderWidth: 2,
+                                pointRadius: 4
                             }]
                         },
-                        options: { responsive: true, maintainAspectRatio: false }
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                tooltip: { mode: 'index', intersect: false }
+                            },
+                            scales: {
+                                y: { beginAtZero: false }
+                            }
+                        }
+                    });
+                }
+
+                // ==================== 6. 渲染 LNG 历史抓取点 图表 ====================
+                // 汇总 data.json 中历史每次抓到的 LNG 价格
+                let lngHistoryDates = [];
+                let lngHistoryPrices = [];
+
+                history.forEach(snapshot => {
+                    const snapshotLNG = snapshot.items['中国LNG出厂价格（全国）'];
+                    if (snapshotLNG && snapshotLNG.BASEPRICE) {
+                        lngHistoryDates.push(snapshot.timestamp.split(' ')[0]);
+                        lngHistoryPrices.push(parseFloat(snapshotLNG.BASEPRICE));
+                    }
+                });
+
+                if (lngHistoryPrices.length > 0) {
+                    new Chart(document.getElementById('lngChart'), {
+                        type: 'line',
+                        data: {
+                            labels: lngHistoryDates,
+                            datasets: [{
+                                label: 'LNG 抓取快照价 (元/吨)',
+                                data: lngHistoryPrices,
+                                borderColor: '#3b82f6',
+                                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                                fill: true,
+                                tension: 0.2,
+                                borderWidth: 2,
+                                pointRadius: 4
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                y: { beginAtZero: false }
+                            }
+                        }
                     });
                 }
 
             } catch (err) {
-                console.error(err);
-                document.getElementById('last-update').innerText = "数据读取失败";
+                console.error("解析数据失败：", err);
+                document.getElementById('last-update').innerText = "数据读取异常";
             }
         }
 
-        initDashboard();
+        renderDashboard();
     </script>
 </body>
 </html>
