@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>大宗能源价格高频监测看板</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
 </head>
 <body class="bg-gray-50 text-gray-800 font-sans p-4 md:p-8">
     <div class="max-w-6xl mx-auto space-y-6">
@@ -43,10 +43,10 @@
             </div>
         </div>
 
-        <!-- 图表区域 (3列或2+1布局) -->
+        <!-- 图表区域 -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
             
-            <!-- 图表 1: CCTD 动力煤历史走势 (自带多周期历史) -->
+            <!-- 图表 1: 动力煤 -->
             <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
                 <div class="flex justify-between items-center mb-4">
                     <h2 class="text-base font-bold text-gray-800 flex items-center gap-2">
@@ -56,11 +56,11 @@
                     <span class="text-xs bg-amber-50 text-amber-600 px-2 py-1 rounded">接口内置历史</span>
                 </div>
                 <div class="relative h-72">
-                    <canvas id="coalChart"></canvas>
+                    <div id="coalChart" class="w-full h-full"></div>
                 </div>
             </div>
 
-            <!-- 图表 2: LNG 出厂价格高频跟踪 (依赖每日采集积累) -->
+            <!-- 图表 2: LNG -->
             <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
                 <div class="flex justify-between items-center mb-4">
                     <h2 class="text-base font-bold text-gray-800 flex items-center gap-2">
@@ -70,11 +70,11 @@
                     <span id="lng-status-tag" class="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded">积累中 (1 天)</span>
                 </div>
                 <div class="relative h-72">
-                    <canvas id="lngChart"></canvas>
+                    <div id="lngChart" class="w-full h-full"></div>
                 </div>
             </div>
 
-            <!-- 图表 3: 汽柴油批发价格高频对比 (全宽展示) -->
+            <!-- 图表 3: 汽柴油 -->
             <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 md:col-span-2">
                 <div class="flex justify-between items-center mb-4">
                     <h2 class="text-base font-bold text-gray-800 flex items-center gap-2">
@@ -84,15 +84,61 @@
                     <span id="oil-status-tag" class="text-xs bg-emerald-50 text-emerald-600 px-2 py-1 rounded">高频监测</span>
                 </div>
                 <div class="relative h-64">
-                    <canvas id="oilChart"></canvas>
+                    <div id="oilChart" class="w-full h-full"></div>
                 </div>
             </div>
 
         </div>
-
     </div>
 
     <script>
+        // 通用配置：纯折线 + 虚线十字准星（无面积阴影）
+        function getBaseOption(unit = '元/吨') {
+            return {
+                grid: { left: 55, right: 20, top: 30, bottom: 35 },
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: {
+                        type: 'cross',
+                        crossStyle: { color: '#94a3b8' },
+                        lineStyle: { type: 'dashed', color: '#94a3b8', width: 1 }
+                    },
+                    backgroundColor: 'rgba(255,255,255,0.96)',
+                    borderColor: '#e2e8f0',
+                    borderWidth: 1,
+                    textStyle: { color: '#334155', fontSize: 12 },
+                    formatter: function (params) {
+                        if (!params || params.length === 0) return '';
+                        let html = `<div style="font-weight:600;margin-bottom:4px">${params[0].axisValueLabel}</div>`;
+                        params.forEach(p => {
+                            if (p.value == null || p.value === undefined) return;
+                            html += `<div style="display:flex;align-items:center;gap:6px;margin:2px 0">
+                                <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color}"></span>
+                                ${p.seriesName}: <b>${p.value}</b> ${unit}
+                            </div>`;
+                        });
+                        return html;
+                    }
+                },
+                xAxis: {
+                    type: 'category',
+                    boundaryGap: false,
+                    axisLine: { lineStyle: { color: '#cbd5e1' } },
+                    axisLabel: { color: '#64748b', fontSize: 11 },
+                    axisTick: { show: false }
+                },
+                yAxis: {
+                    type: 'value',
+                    scale: true,
+                    name: unit,
+                    nameTextStyle: { color: '#94a3b8', fontSize: 10 },
+                    axisLine: { show: false },
+                    splitLine: { lineStyle: { color: '#e2e8f0' } },
+                    axisLabel: { color: '#64748b', fontSize: 11 }
+                }
+            };
+        }
+
         async function renderDashboard() {
             try {
                 const response = await fetch('./data.json');
@@ -101,13 +147,13 @@
 
                 if (!history || history.length === 0) return;
 
-                // 1. 设置最后更新时间
+                // 1. 最后更新时间
                 const latestRecord = history[history.length - 1];
                 document.getElementById('last-update').innerText = latestRecord.timestamp;
 
                 const items = latestRecord.items;
 
-                // ==================== 2. 解析顶栏卡片数值 ====================
+                // ==================== 2. 顶栏卡片 ====================
                 const lngObj = items['中国LNG出厂价格（全国）'];
                 if (lngObj && lngObj.BASEPRICE) {
                     document.getElementById('lng-price').innerText = `${lngObj.BASEPRICE} 元/吨`;
@@ -123,7 +169,7 @@
                 const coalObj = items['CCTD秦皇岛动力煤价格'];
                 let coalDates = [], coalPrices = [];
                 if (coalObj && Array.isArray(coalObj.data) && coalObj.data.length > 0) {
-                    const latestCoal = coalObj.data[0]; 
+                    const latestCoal = coalObj.data[0];
                     document.getElementById('coal-price').innerText = `${latestCoal[1]} 元/吨`;
                     document.getElementById('coal-date').innerText = `发布日期: ${latestCoal[0]}`;
 
@@ -132,100 +178,115 @@
                     coalPrices = reversedData.map(row => parseFloat(row[1]));
                 }
 
-                // ==================== 3. 渲染 动力煤 图表 ====================
+                // ==================== 3. 动力煤图表（无面积） ====================
                 if (coalPrices.length > 0) {
-                    new Chart(document.getElementById('coalChart'), {
+                    const coalChart = echarts.init(document.getElementById('coalChart'));
+                    const option = getBaseOption('元/吨');
+                    option.series = [{
+                        name: '5500大卡动力煤',
                         type: 'line',
-                        data: {
-                            labels: coalDates,
-                            datasets: [{
-                                label: '5500大卡动力煤 (元/吨)',
-                                data: coalPrices,
-                                borderColor: '#f59e0b',
-                                backgroundColor: 'rgba(245, 158, 11, 0.1)',
-                                fill: true,
-                                tension: 0.3,
-                                borderWidth: 2,
-                                pointRadius: 4
-                            }]
-                        },
-                        options: { responsive: true, maintainAspectRatio: false }
-                    });
+                        data: coalPrices,
+                        smooth: 0.3,
+                        symbol: 'circle',
+                        symbolSize: 6,
+                        showSymbol: true,
+                        lineStyle: { color: '#f59e0b', width: 2 },
+                        itemStyle: { color: '#f59e0b' }
+                        // 已去掉 areaStyle，不再有阴影
+                    }];
+                    option.xAxis.data = coalDates;
+                    coalChart.setOption(option);
+                    window.addEventListener('resize', () => coalChart.resize());
                 }
 
-                // ==================== 4. 提取历史积累数据 (LNG & 汽柴油) ====================
+                // ==================== 4. 提取历史数据 ====================
                 let historyDates = [];
                 let lngPrices = [];
                 let dieselPrices = [];
                 let petrolPrices = [];
 
                 history.forEach(snapshot => {
-                    const timeLabel = snapshot.timestamp.split(' ')[0]; // 取 YYYY-MM-DD
-                    
-                    // 仅当时间未重复添加时压入
+                    const timeLabel = snapshot.timestamp.split(' ')[0];
                     if (!historyDates.includes(timeLabel)) {
                         historyDates.push(timeLabel);
 
-                        // LNG
                         const curLNG = snapshot.items['中国LNG出厂价格（全国）'];
-                        lngPrices.push(curLNG && curLNG.BASEPRICE ? parseFloat(curLNG.BASEPRICE) : null);
+                        // 强制转数字，无效值用 null
+                        const lngVal = curLNG && curLNG.BASEPRICE != null ? parseFloat(curLNG.BASEPRICE) : null;
+                        lngPrices.push(isNaN(lngVal) ? null : lngVal);
 
-                        // 汽柴油
                         const curOil = snapshot.items['中国汽柴油批发价格'];
-                        dieselPrices.push(curOil && curOil.BASEPRICE_diesel ? parseFloat(curOil.BASEPRICE_diesel) : null);
-                        petrolPrices.push(curOil && curOil.BASEPRICE_petrol ? parseFloat(curOil.BASEPRICE_petrol) : null);
+                        const dieselVal = curOil && curOil.BASEPRICE_diesel != null ? parseFloat(curOil.BASEPRICE_diesel) : null;
+                        const petrolVal = curOil && curOil.BASEPRICE_petrol != null ? parseFloat(curOil.BASEPRICE_petrol) : null;
+                        dieselPrices.push(isNaN(dieselVal) ? null : dieselVal);
+                        petrolPrices.push(isNaN(petrolVal) ? null : petrolVal);
                     }
                 });
 
-                // 更新 LNG 标签状态
                 document.getElementById('lng-status-tag').innerText = `连续监测 (${historyDates.length} 天)`;
 
-                // ==================== 5. 渲染 LNG 图表 ====================
-                new Chart(document.getElementById('lngChart'), {
-                    type: 'line',
-                    data: {
-                        labels: historyDates,
-                        datasets: [{
-                            label: 'LNG 出厂价 (元/吨)',
-                            data: lngPrices,
-                            borderColor: '#3b82f6',
-                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                            fill: true,
-                            tension: 0.2,
-                            borderWidth: 2,
-                            pointRadius: 6, // 放大数据点，单点时也能看清
-                            pointBackgroundColor: '#3b82f6'
-                        }]
-                    },
-                    options: { responsive: true, maintainAspectRatio: false }
-                });
+                // ==================== 5. LNG 图表（重点修复） ====================
+                const lngChart = echarts.init(document.getElementById('lngChart'));
+                {
+                    const option = getBaseOption('元/吨');
+                    option.series = [{
+                        name: 'LNG 出厂价',
+                        type: 'line',
+                        data: lngPrices,
+                        smooth: 0.2,
+                        symbol: 'circle',
+                        symbolSize: 8,          // 单点时更明显
+                        showSymbol: true,      // 始终显示数据点
+                        connectNulls: true,    // 连接空值，避免断线
+                        lineStyle: { color: '#3b82f6', width: 2 },
+                        itemStyle: { color: '#3b82f6' }
+                        // 已去掉 areaStyle
+                    }];
+                    option.xAxis.data = historyDates;
+                    lngChart.setOption(option);
+                    window.addEventListener('resize', () => lngChart.resize());
+                }
 
-                // ==================== 6. 渲染 汽柴油 双线图表 ====================
-                new Chart(document.getElementById('oilChart'), {
-                    type: 'line',
-                    data: {
-                        labels: historyDates,
-                        datasets: [
-                            {
-                                label: '92# 汽油批发价 (元/吨)',
-                                data: petrolPrices,
-                                borderColor: '#ef4444',
-                                backgroundColor: 'transparent',
-                                borderWidth: 2,
-                                pointRadius: 5
-                            },
-                            {
-                                label: '0# 柴油批发价 (元/吨)',
-                                data: dieselPrices,
-                                borderColor: '#10b981',
-                                backgroundColor: 'transparent',
-                                borderWidth: 2,
-                                pointRadius: 5
-                            }
-                        ]
-                    },
-                    options: { responsive: true, maintainAspectRatio: false }
-                });
+                // ==================== 6. 汽柴油图表 ====================
+                const oilChart = echarts.init(document.getElementById('oilChart'));
+                {
+                    const option = getBaseOption('元/吨');
+                    option.legend = {
+                        data: ['92# 汽油批发价', '0# 柴油批发价'],
+                        top: 5,
+                        textStyle: { color: '#64748b', fontSize: 11 }
+                    };
+                    option.grid.top = 40;
+                    option.series = [
+                        {
+                            name: '92# 汽油批发价',
+                            type: 'line',
+                            data: petrolPrices,
+                            smooth: 0.2,
+                            symbol: 'circle',
+                            symbolSize: 6,
+                            showSymbol: true,
+                            connectNulls: true,
+                            lineStyle: { color: '#ef4444', width: 2 },
+                            itemStyle: { color: '#ef4444' }
+                        },
+                        {
+                            name: '0# 柴油批发价',
+                            type: 'line',
+                            data: dieselPrices,
+                            smooth: 0.2,
+                            symbol: 'circle',
+                            symbolSize: 6,
+                            showSymbol: true,
+                            connectNulls: true,
+                            lineStyle: { color: '#10b981', width: 2 },
+                            itemStyle: { color: '#10b981' }
+                        }
+                    ];
+                    option.xAxis.data = historyDates;
+                    oilChart.setOption(option);
+                    window.addEventListener('resize', () => oilChart.resize());
+                }
 
             } catch (err) {
                 console.error("解析数据失败：", err);
