@@ -43,10 +43,10 @@
             </div>
         </div>
 
-        <!-- 图表区域 (3列或2+1布局) -->
+        <!-- 图表区域 -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
             
-            <!-- 图表 1: CCTD 动力煤历史走势 (自带多周期历史) -->
+            <!-- 图表 1: CCTD 动力煤历史走势 -->
             <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
                 <div class="flex justify-between items-center mb-4">
                     <h2 class="text-base font-bold text-gray-800 flex items-center gap-2">
@@ -60,7 +60,7 @@
                 </div>
             </div>
 
-            <!-- 图表 2: LNG 出厂价格高频跟踪 (依赖每日采集积累) -->
+            <!-- 图表 2: LNG 出厂价格高频跟踪 -->
             <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
                 <div class="flex justify-between items-center mb-4">
                     <h2 class="text-base font-bold text-gray-800 flex items-center gap-2">
@@ -74,7 +74,7 @@
                 </div>
             </div>
 
-            <!-- 图表 3: 汽柴油批发价格高频对比 (全宽展示) -->
+            <!-- 图表 3: 汽柴油批发价格高频对比 -->
             <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 md:col-span-2">
                 <div class="flex justify-between items-center mb-4">
                     <h2 class="text-base font-bold text-gray-800 flex items-center gap-2">
@@ -93,6 +93,48 @@
     </div>
 
     <script>
+        // 通用优化配置：防止移动端/触屏出现阴影块，并实现随手指移动顺畅精准地显示数据点
+        const commonChartOptions = {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                mode: 'index',
+                intersect: false, // 手指横向滑动时即可触发最近数据点，无需精准点击小圆点
+            },
+            hover: {
+                mode: 'index',
+                intersect: false
+            },
+            plugins: {
+                tooltip: {
+                    enabled: true,
+                    mode: 'index',
+                    intersect: false,
+                    padding: 10,
+                    cornerRadius: 8,
+                    backgroundColor: 'rgba(15, 23, 42, 0.85)', // 类似 Slate-900 的精美透明背景
+                    titleFont: { size: 12, weight: 'bold' },
+                    bodyFont: { size: 12 },
+                    displayColors: true,
+                    boxWidth: 8,
+                    boxHeight: 8,
+                    usePointStyle: true
+                }
+            },
+            scales: {
+                x: {
+                    grid: {
+                        display: false
+                    }
+                },
+                y: {
+                    grid: {
+                        color: 'rgba(241, 245, 249, 1)' // 淡雅网格线
+                    }
+                }
+            }
+        };
+
         async function renderDashboard() {
             try {
                 const response = await fetch('./data.json');
@@ -146,10 +188,14 @@
                                 fill: true,
                                 tension: 0.3,
                                 borderWidth: 2,
-                                pointRadius: 4
+                                pointRadius: 2,
+                                pointHoverRadius: 6, // 触屏选中时放大该点
+                                pointHoverBackgroundColor: '#f59e0b',
+                                pointHoverBorderColor: '#fff',
+                                pointHoverBorderWidth: 2
                             }]
                         },
-                        options: { responsive: true, maintainAspectRatio: false }
+                        options: commonChartOptions
                     });
                 }
 
@@ -162,7 +208,6 @@
                 history.forEach(snapshot => {
                     const timeLabel = snapshot.timestamp.split(' ')[0]; // 取 YYYY-MM-DD
                     
-                    // 仅当时间未重复添加时压入
                     if (!historyDates.includes(timeLabel)) {
                         historyDates.push(timeLabel);
 
@@ -193,11 +238,15 @@
                             fill: true,
                             tension: 0.2,
                             borderWidth: 2,
-                            pointRadius: 6, // 放大数据点，单点时也能看清
-                            pointBackgroundColor: '#3b82f6'
+                            pointRadius: 4,
+                            pointBackgroundColor: '#3b82f6',
+                            pointHoverRadius: 7, // 触摸高亮放大
+                            pointHoverBackgroundColor: '#3b82f6',
+                            pointHoverBorderColor: '#fff',
+                            pointHoverBorderWidth: 2
                         }]
                     },
-                    options: { responsive: true, maintainAspectRatio: false }
+                    options: commonChartOptions
                 });
 
                 // ==================== 6. 渲染 汽柴油 双线图表 ====================
@@ -212,7 +261,11 @@
                                 borderColor: '#ef4444',
                                 backgroundColor: 'transparent',
                                 borderWidth: 2,
-                                pointRadius: 5
+                                pointRadius: 3,
+                                pointHoverRadius: 6,
+                                pointHoverBackgroundColor: '#ef4444',
+                                pointHoverBorderColor: '#fff',
+                                pointHoverBorderWidth: 2
                             },
                             {
                                 label: '0# 柴油批发价 (元/吨)',
@@ -220,11 +273,15 @@
                                 borderColor: '#10b981',
                                 backgroundColor: 'transparent',
                                 borderWidth: 2,
-                                pointRadius: 5
+                                pointRadius: 3,
+                                pointHoverRadius: 6,
+                                pointHoverBackgroundColor: '#10b981',
+                                pointHoverBorderColor: '#fff',
+                                pointHoverBorderWidth: 2
                             }
                         ]
                     },
-                    options: { responsive: true, maintainAspectRatio: false }
+                    options: commonChartOptions
                 });
 
             } catch (err) {
