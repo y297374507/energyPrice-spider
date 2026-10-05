@@ -23654,5 +23654,21 @@
       },
       "CCTD秦皇岛动力煤价格": null
     }
+  },
+  {
+    "timestamp": "2026-10-05 18:31:42",
+    "items": {
+      "中国LNG出厂价格（全国）": {
+        "DATA": "",
+        "BASEPRICE": ""
+      },
+      "中国汽柴油批发价格": {
+        "BASEPRICE_diesel": "9321",
+        "BASEPRICE_petrol": "10666",
+        "DATA_diesel": "2026-09-29",
+        "DATA_petrol": "2026-09-29"
+      },
+      "CCTD秦皇岛动力煤价格": null
+    }
   }
 ]
